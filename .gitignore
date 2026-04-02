@@ -1,0 +1,47 @@
+# Binaries
+bin/
+/app
+/cli
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build output
+build/
+tmp/
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Air
+tmp/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/wailsjs/
+
+# Environment
+.env
+.env.*
+!.env.example
+*.log
+
+# Config (may contain secrets)
+config.yaml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vendor
+vendor/

@@ -1,0 +1,27 @@
+# アプリケーション設定
+app:
+  name: myapp
+  version: 1.0.0
+  environment: development
+
+# サーバー設定
+server:
+  host: localhost
+  port: 8080
+
+# ログ設定
+logging:
+  level: info
+  format: json
+  output: stdout
+
+# CLI設定
+cli:
+  theme: auto
+
+# デスクトップ設定
+desktop:
+  window:
+    width: 1200
+    height: 800
+    resizable: true
