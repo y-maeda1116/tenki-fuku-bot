@@ -1,142 +1,131 @@
-# Go CLI + Desktop Template
+# Tenki Fuku Bot
 
-A cross-platform Go application template supporting both CLI and Desktop (Wails) interfaces.
+天気APIから取得した気温データに基づき、成人男性・成人女性・子供それぞれのカテゴリーに最適化された服装アドバイスを Discord Webhook で通知するツールです。
 
-## Features
+## 機能
 
-- **Dual Interface:** CLI (Cobra) and Desktop (Wails + React)
-- **Shared Core:** Business logic shared between CLI and Desktop
-- **Structured Logging:** zap-based logging with multiple levels
-- **Configuration:** Viper-based config with YAML/TOML/JSON support
-- **Hot Reload:** Air for CLI, Wails dev for Desktop
-- **Testing:** mockgen with 80%+ coverage goal
-- **CI/CD:** GitHub Actions for testing and cross-platform building
+- OpenWeatherMap API から気温データを取得
+- 気温に応じた服装アドバイスを自動生成
+- 成人男性・成人女性・子供の3カテゴリーに対応
+- 寒暖差が大きい日の脱ぎ着アドバイス
+- 子供向けの「+1枚」アドバイス
+- Discord Embeds 形式の見やすい通知
+- GitHub Actions または Google Apps Script で毎朝自動実行
 
-## Project Structure
+## 服装ロジック
+
+| 最高気温 | 服装 |
+|----------|------|
+| < 15℃ | 厚手のアウター（コート、ダウン） |
+| 15℃〜20℃ | 薄手のジャケット、カーディガン |
+| 20℃〜25℃ | 長袖シャツ |
+| >= 25℃ | 半袖 |
+
+- 寒暖差（最高-最低）が 10℃以上 → 「脱ぎ着しやすい服装を」強調
+- 子供カテゴリー → 「活動量を考慮して+1枚」を追加
+
+## プロジェクト構成
 
 ```
 .
-├── cmd/
-│   ├── app/
-│   │   └── main.go           # Background app (signal handling)
-│   ├── cli/
-│   │   └── main.go           # CLI entry point (Cobra)
-│   └── desktop/
-│       ├── main.go           # Desktop entry point (Wails)
-│       ├── wails.json        # Wails configuration
-│       └── frontend/         # React + TypeScript frontend
+├── cmd/cli/main.go             # エントリポイント
+├── config/config.yaml          # 設定ファイル（都市・カテゴリ）
 ├── internal/
-│   ├── cli/                  # CLI command definitions
-│   ├── config/               # Configuration (Viper)
-│   ├── core/                 # Shared business logic
-│   ├── logger/               # Logging (zap)
-│   ├── ui/                   # Wails UI bindings
-│   └── version/              # Version injected at build time
-├── test/
-│   └── mocks/                # Generated mocks
-├── .github/workflows/        # CI/CD
-├── Makefile                  # Build targets
-├── config.yaml.example       # Configuration template
-├── env.example               # Environment variables template
-├── air.toml                  # Hot reload (CLI)
-└── go.mod                    # Go module definition
+│   ├── config/                 # YAML設定読み込み
+│   ├── weather/                # OpenWeatherMap API クライアント
+│   ├── outfit/                 # 服装判定ロジック
+│   └── discord/                # Discord Webhook 通知
+├── gas/                        # Google Apps Script 版
+│   └── tenki-fuku-bot.gs
+├── .github/workflows/
+│   ├── notify.yml              # 毎朝 JST 06:00 に通知
+│   └── test.yml                # テスト CI
+├── Makefile
+└── go.mod
 ```
 
-## Prerequisites
+## セットアップ
+
+### 前提条件
 
 - Go 1.26 or later
-- Node.js 20 or later (for Desktop)
-- Make
 
-## Getting Started
+### インストール
 
 ```bash
-# Clone repository
-git clone https://github.com/y-maeda1116/template-go-cross.git
-cd template-go-cross
-
-# Install Go dependencies
+git clone https://github.com/y-maeda1116/tenki-fuku-bot.git
+cd tenki-fuku-bot
 go mod download
-
-# Install frontend dependencies (for Desktop only)
-cd cmd/desktop/frontend && npm install && cd ../..
 ```
 
-### Configuration
+### 設定
 
-```bash
-cp config.yaml.example config.yaml
-# Edit config.yaml with your settings
+1. `config/config.yaml` で都市とカテゴリーを設定:
+
+```yaml
+city: "Tokyo"
+categories:
+  men: true
+  women: true
+  kids: true
 ```
 
-## Usage
-
-### CLI
+2. 環境変数を設定:
 
 ```bash
-# Run CLI
-make run-cli
-
-# Show help
-make run-cli ARGS="--help"
-
-# Say hello
-make run-cli ARGS="hello --name World"
-
-# Build CLI
-make build-cli
+export WEATHER_API_KEY="your-openweathermap-api-key"
+export DISCORD_WEBHOOK_URL="your-discord-webhook-url"
 ```
 
-### Desktop
+## 実行
 
 ```bash
-# Run Desktop in dev mode
-make run-desktop
+# 直接実行
+go run cmd/cli/main.go
 
-# Build Desktop
-make build-desktop
+# または Make を使用
+make run
+
+# ビルド
+make build
 ```
 
-### Development
+## テスト
 
 ```bash
-# Run tests (excludes CGO-dependent desktop packages)
+# テスト実行
 make test
 
-# Run tests with coverage
+# カバレッジ付き
 make test-coverage
 
-# Run tests with race detector
-make test-race
-
-# Generate mocks
-make mocks
-
-# Format code
+# フォーマット
 make fmt
 
-# Run linter
+# Lint
 make lint
-
-# Clean build artifacts
-make clean
 ```
 
-## Architecture
+## CI/CD
 
-```
-Application Layer
-├── CLI (Cobra)
-├── Desktop (Wails + React)
-└── Background App (signal handling)
-         ↓
-Core Business Logic Layer
-└── Shared services (internal/core)
-         ↓
-Infrastructure Layer
-├── Config (Viper)
-└── Logger (zap)
-```
+### GitHub Actions
+
+- **テスト**: push/PR 時に自動実行
+- **通知**: 毎日 JST 06:00（UTC 21:00）に自動実行
+
+GitHub リポジトリの **Settings > Secrets and variables > Actions** で以下を設定:
+
+- `WEATHER_API_KEY`
+- `DISCORD_WEBHOOK_URL`
+
+### Google Apps Script（cron が不安定な場合の代替）
+
+1. [Google Apps Script](https://script.google.com/) で新規プロジェクトを作成
+2. `gas/tenki-fuku-bot.gs` の内容をコピペ
+3. **スクリプトプロパティ** に設定:
+   - `WEATHER_API_KEY`
+   - `DISCORD_WEBHOOK_URL`
+4. **トリガー設定**: 関数 `main` を時間主導型 > 日付ベースのタイマー > 午前 6時〜7時
 
 ## License
 
