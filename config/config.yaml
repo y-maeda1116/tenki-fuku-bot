@@ -1,0 +1,5 @@
+city: "Tokyo"
+categories:
+  men: true
+  women: true
+  kids: true

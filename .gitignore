@@ -29,8 +29,8 @@ frontend/wailsjs/
 !.env.example
 *.log
 
-# Config (may contain secrets)
-config.yaml
+# Config (user-specific overrides)
+config/config.local.yaml
 
 # Editor
 .vscode/
