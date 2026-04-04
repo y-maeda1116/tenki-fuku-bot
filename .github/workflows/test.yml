@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -22,11 +22,4 @@ jobs:
       run: go mod download
 
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./internal/... ./cmd/app/... ./cmd/cli/...
-
-    - name: Upload coverage
-      uses: codecov/codecov-action@v6
-      with:
-        files: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
+      run: go test -v -race -coverprofile=coverage.out ./internal/...

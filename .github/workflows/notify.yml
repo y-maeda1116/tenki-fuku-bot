@@ -1,0 +1,24 @@
+name: Daily Weather Notification
+
+on:
+  schedule:
+    - cron: '0 21 * * *'  # JST 06:00 = UTC 21:00
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Run tenki-fuku-bot
+      env:
+        WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      run: go run cmd/cli/main.go
