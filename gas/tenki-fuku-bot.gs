@@ -161,8 +161,9 @@ function tempColor(tempMax) {
   return 0xE74C3C;
 }
 
-function buildEmbed(advice) {
+function buildEmbed(advice, weather) {
   var fields = [
+    { name: "天気", value: weather.description, inline: false },
     { name: "服装", value: advice.outfit, inline: false },
     { name: "最高気温", value: advice.tempMax.toFixed(1) + "\u2103", inline: true },
     { name: "最低気温", value: advice.tempMin.toFixed(1) + "\u2103", inline: true },
@@ -183,7 +184,7 @@ function buildEmbed(advice) {
 function sendDiscordNotification(webhookUrl, advices, weather) {
   var embeds = [];
   for (var i = 0; i < advices.length; i++) {
-    embeds.push(buildEmbed(advices[i]));
+    embeds.push(buildEmbed(advices[i], weather));
   }
 
   var payload = JSON.stringify({ embeds: embeds });
