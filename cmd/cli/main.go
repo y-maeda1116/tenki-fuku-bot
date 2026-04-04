@@ -32,7 +32,7 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	wd, err := weather.Fetch(cfg.City, apiKey)
+	wd, err := weather.FetchTomorrow(cfg.City, apiKey)
 	if err != nil {
 		return fmt.Errorf("fetching weather: %w", err)
 	}
@@ -52,6 +52,6 @@ func run() error {
 		return fmt.Errorf("sending discord notification: %w", err)
 	}
 
-	fmt.Printf("Notification sent for %s (%.1f℃/%.1f℃)\n", wd.City, wd.TempMax, wd.TempMin)
+	fmt.Printf("Notification sent for %s tomorrow %s (%.1f℃/%.1f℃)\n", wd.City, wd.Date, wd.TempMax, wd.TempMin)
 	return nil
 }

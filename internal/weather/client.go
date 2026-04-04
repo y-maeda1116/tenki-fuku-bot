@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 type WeatherData struct {
@@ -11,26 +12,36 @@ type WeatherData struct {
 	TempMax     float64
 	TempMin     float64
 	Description string
+	Date        string
 }
 
-type apiResponse struct {
-	Name    string `json:"name"`
-	Weather []struct {
-		Description string `json:"description"`
-	} `json:"weather"`
-	Main struct {
+type forecastItem struct {
+	DtTxt   string `json:"dt_txt"`
+	Main    struct {
 		TempMax float64 `json:"temp_max"`
 		TempMin float64 `json:"temp_min"`
 	} `json:"main"`
+	Weather []struct {
+		Description string `json:"description"`
+	} `json:"weather"`
 }
 
-const baseURL = "https://api.openweathermap.org/data/2.5/weather"
-
-func Fetch(city, apiKey string) (*WeatherData, error) {
-	return FetchWithURL(baseURL, city, apiKey)
+type forecastResponse struct {
+	City struct {
+		Name string `json:"name"`
+	} `json:"city"`
+	List []forecastItem `json:"list"`
 }
 
-func FetchWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
+const forecastURL = "https://api.openweathermap.org/data/2.5/forecast"
+
+// FetchTomorrow fetches tomorrow's weather forecast for the given city.
+func FetchTomorrow(city, apiKey string) (*WeatherData, error) {
+	return FetchTomorrowWithURL(forecastURL, city, apiKey)
+}
+
+// FetchTomorrowWithURL fetches tomorrow's forecast using a custom API URL (for testing).
+func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -43,28 +54,56 @@ func FetchWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetching weather: %w", err)
+		return nil, fmt.Errorf("fetching forecast: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("weather API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("forecast API returned status %d", resp.StatusCode)
 	}
 
-	var apiResp apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("decoding weather response: %w", err)
+	var fcResp forecastResponse
+	if err := json.NewDecoder(resp.Body).Decode(&fcResp); err != nil {
+		return nil, fmt.Errorf("decoding forecast response: %w", err)
 	}
 
-	description := ""
-	if len(apiResp.Weather) > 0 {
-		description = apiResp.Weather[0].Description
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	var maxTemp float64 = -100
+	var minTemp float64 = 100
+	descCount := map[string]int{}
+	var topDesc string
+	topCount := 0
+
+	for _, item := range fcResp.List {
+		if len(item.DtTxt) < 10 || item.DtTxt[:10] != tomorrow {
+			continue
+		}
+		if item.Main.TempMax > maxTemp {
+			maxTemp = item.Main.TempMax
+		}
+		if item.Main.TempMin < minTemp {
+			minTemp = item.Main.TempMin
+		}
+		if len(item.Weather) > 0 {
+			d := item.Weather[0].Description
+			descCount[d]++
+			if descCount[d] > topCount {
+				topCount = descCount[d]
+				topDesc = d
+			}
+		}
+	}
+
+	if maxTemp == -100 {
+		return nil, fmt.Errorf("no forecast data available for tomorrow (%s)", tomorrow)
 	}
 
 	return &WeatherData{
-		City:        apiResp.Name,
-		TempMax:     apiResp.Main.TempMax,
-		TempMin:     apiResp.Main.TempMin,
-		Description: description,
+		City:        fcResp.City.Name,
+		TempMax:     maxTemp,
+		TempMin:     minTemp,
+		Description: topDesc,
+		Date:        tomorrow,
 	}, nil
 }

@@ -5,17 +5,37 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
-func TestFetch(t *testing.T) {
+func TestFetchTomorrow(t *testing.T) {
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 	response := map[string]interface{}{
-		"name": "Tokyo",
-		"weather": []map[string]interface{}{
-			{"description": "clear sky"},
+		"city": map[string]interface{}{
+			"name": "Tokyo",
 		},
-		"main": map[string]interface{}{
-			"temp_max": 22.5,
-			"temp_min": 15.3,
+		"list": []map[string]interface{}{
+			{
+				"dt_txt": tomorrow + " 09:00:00",
+				"main":   map[string]interface{}{"temp_max": 22.5, "temp_min": 18.0},
+				"weather": []map[string]interface{}{
+					{"description": "scattered clouds"},
+				},
+			},
+			{
+				"dt_txt": tomorrow + " 12:00:00",
+				"main":   map[string]interface{}{"temp_max": 26.3, "temp_min": 22.1},
+				"weather": []map[string]interface{}{
+					{"description": "clear sky"},
+				},
+			},
+			{
+				"dt_txt": tomorrow + " 18:00:00",
+				"main":   map[string]interface{}{"temp_max": 20.0, "temp_min": 15.3},
+				"weather": []map[string]interface{}{
+					{"description": "clear sky"},
+				},
+			},
 		},
 	}
 	body, _ := json.Marshal(response)
@@ -35,15 +55,15 @@ func TestFetch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	data, err := FetchWithURL(server.URL, "Tokyo", "test-key")
+	data, err := FetchTomorrowWithURL(server.URL, "Tokyo", "test-key")
 	if err != nil {
-		t.Fatalf("Fetch() error = %v", err)
+		t.Fatalf("FetchTomorrow() error = %v", err)
 	}
 	if data.City != "Tokyo" {
 		t.Errorf("City = %q, want %q", data.City, "Tokyo")
 	}
-	if data.TempMax != 22.5 {
-		t.Errorf("TempMax = %f, want 22.5", data.TempMax)
+	if data.TempMax != 26.3 {
+		t.Errorf("TempMax = %f, want 26.3", data.TempMax)
 	}
 	if data.TempMin != 15.3 {
 		t.Errorf("TempMin = %f, want 15.3", data.TempMin)
@@ -51,16 +71,49 @@ func TestFetch(t *testing.T) {
 	if data.Description != "clear sky" {
 		t.Errorf("Description = %q, want %q", data.Description, "clear sky")
 	}
+	if data.Date != tomorrow {
+		t.Errorf("Date = %q, want %q", data.Date, tomorrow)
+	}
 }
 
-func TestFetch_serverError(t *testing.T) {
+func TestFetchTomorrow_serverError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	_, err := FetchWithURL(server.URL, "Tokyo", "test-key")
+	_, err := FetchTomorrowWithURL(server.URL, "Tokyo", "test-key")
 	if err == nil {
-		t.Error("Fetch() expected error for 500 response")
+		t.Error("FetchTomorrow() expected error for 500 response")
+	}
+}
+
+func TestFetchTomorrow_noDataForTomorrow(t *testing.T) {
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	response := map[string]interface{}{
+		"city": map[string]interface{}{
+			"name": "Tokyo",
+		},
+		"list": []map[string]interface{}{
+			{
+				"dt_txt": yesterday + " 12:00:00",
+				"main":   map[string]interface{}{"temp_max": 20.0, "temp_min": 15.0},
+				"weather": []map[string]interface{}{
+					{"description": "clear sky"},
+				},
+			},
+		},
+	}
+	body, _ := json.Marshal(response)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	}))
+	defer server.Close()
+
+	_, err := FetchTomorrowWithURL(server.URL, "Tokyo", "test-key")
+	if err == nil {
+		t.Error("FetchTomorrow() expected error when no data for tomorrow")
 	}
 }

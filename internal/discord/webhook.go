@@ -58,7 +58,7 @@ func buildEmbed(advice outfit.OutfitAdvice, wd *weather.WeatherData) embed {
 	}
 
 	return embed{
-		Title:  fmt.Sprintf("%s %sの服装アドバイス", emoji, label),
+		Title:  fmt.Sprintf("%s 明日の%sの服装アドバイス", emoji, label),
 		Color:  outfit.TempColor(advice.TempMax),
 		Fields: fields,
 	}
