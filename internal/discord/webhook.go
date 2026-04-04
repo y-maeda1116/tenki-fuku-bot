@@ -43,6 +43,7 @@ func buildEmbed(advice outfit.OutfitAdvice, wd *weather.WeatherData) embed {
 	label := categoryLabel[advice.Category]
 
 	fields := []embedField{
+		{Name: "天気", Value: wd.Description, Inline: false},
 		{Name: "服装", Value: advice.Outfit, Inline: false},
 		{Name: "最高気温", Value: fmt.Sprintf("%.1f℃", advice.TempMax), Inline: true},
 		{Name: "最低気温", Value: fmt.Sprintf("%.1f℃", advice.TempMin), Inline: true},

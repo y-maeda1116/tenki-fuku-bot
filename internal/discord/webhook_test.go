@@ -83,7 +83,7 @@ func TestSend_serverError(t *testing.T) {
 }
 
 func TestBuildEmbed(t *testing.T) {
-	wd := &weather.WeatherData{City: "Tokyo", TempMax: 18.0, TempMin: 12.0}
+	wd := &weather.WeatherData{City: "Tokyo", TempMax: 18.0, TempMin: 12.0, Description: "薄い雲"}
 	advice := outfit.OutfitAdvice{
 		Category: "men",
 		Outfit:   "薄手のジャケット、カーディガン",
@@ -102,5 +102,19 @@ func TestBuildEmbed(t *testing.T) {
 	}
 	if len(embed.Fields) == 0 {
 		t.Error("embed has no Fields")
+	}
+
+	// Verify weather description field exists
+	found := false
+	for _, f := range embed.Fields {
+		if f.Name == "天気" {
+			found = true
+			if f.Value != "薄い雲" {
+				t.Errorf("天気 field = %q, want %q", f.Value, "薄い雲")
+			}
+		}
+	}
+	if !found {
+		t.Error("embed missing 天気 field")
 	}
 }
