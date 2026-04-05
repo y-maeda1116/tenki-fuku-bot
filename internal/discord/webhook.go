@@ -53,6 +53,16 @@ func buildWeatherEmbed(wd *weather.WeatherData) embed {
 		embedField{Name: "寒暖差", Value: fmt.Sprintf("%.1f℃", wd.TempMax-wd.TempMin), Inline: true},
 	)
 
+	if wd.TodayMax > -100 {
+		diffMax := wd.TempMax - wd.TodayMax
+		diffMin := wd.TempMin - wd.TodayMin
+		fields = append(fields, embedField{
+			Name:   "前日比",
+			Value:  fmt.Sprintf("最高 %+.1f℃ / 最低 %+.1f℃", diffMax, diffMin),
+			Inline: false,
+		})
+	}
+
 	return embed{
 		Title:  fmt.Sprintf("🌤 明日の天気（%s）", wd.City),
 		Color:  outfit.TempColor(wd.TempMax),

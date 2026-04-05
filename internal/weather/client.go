@@ -20,6 +20,8 @@ type WeatherData struct {
 	Description string
 	Date        string
 	TimeSlots   []TimeSlot
+	TodayMax    float64
+	TodayMin    float64
 }
 
 type forecastItem struct {
@@ -82,16 +84,33 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 	}
 
 	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	today := time.Now().Format("2006-01-02")
 
 	var maxTemp float64 = -100
 	var minTemp float64 = 100
+	var todayMax float64 = -100
+	var todayMin float64 = 100
 	descCount := map[string]int{}
 	topDesc := ""
 	topCount := 0
 	var slots []TimeSlot
 
 	for _, item := range fcResp.List {
-		if len(item.DtTxt) < 10 || item.DtTxt[:10] != tomorrow {
+		if len(item.DtTxt) < 10 {
+			continue
+		}
+		datePart := item.DtTxt[:10]
+
+		if datePart == today {
+			if item.Main.Temp > todayMax {
+				todayMax = item.Main.Temp
+			}
+			if item.Main.Temp < todayMin {
+				todayMin = item.Main.Temp
+			}
+		}
+
+		if datePart != tomorrow {
 			continue
 		}
 		if item.Main.Temp > maxTemp {
@@ -136,5 +155,7 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 		Description: topDesc,
 		Date:        tomorrow,
 		TimeSlots:   slots,
+		TodayMax:    todayMax,
+		TodayMin:    todayMin,
 	}, nil
 }
