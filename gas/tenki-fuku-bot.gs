@@ -61,12 +61,16 @@ function fetchTomorrowWeather(city, apiKey) {
   var data = JSON.parse(response.getContentText());
   var cityName = data.city.name;
 
+  var today = new Date();
   var tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
+  var todayStr = Utilities.formatDate(today, "JST", "yyyy-MM-dd");
   var tomorrowStr = Utilities.formatDate(tomorrow, "JST", "yyyy-MM-dd");
 
   var maxTemp = -100;
   var minTemp = 100;
+  var todayMax = -100;
+  var todayMin = 100;
   var descCount = {};
   var topDesc = "";
   var topCount = 0;
@@ -78,7 +82,14 @@ function fetchTomorrowWeather(city, apiKey) {
   for (var i = 0; i < data.list.length; i++) {
     var item = data.list[i];
     var dtTxt = item.dt_txt;
-    if (dtTxt.substring(0, 10) !== tomorrowStr) continue;
+    var datePart = dtTxt.substring(0, 10);
+
+    if (datePart === todayStr) {
+      if (item.main.temp_max > todayMax) todayMax = item.main.temp_max;
+      if (item.main.temp_min < todayMin) todayMin = item.main.temp_min;
+    }
+
+    if (datePart !== tomorrowStr) continue;
 
     if (item.main.temp_max > maxTemp) maxTemp = item.main.temp_max;
     if (item.main.temp_min < minTemp) minTemp = item.main.temp_min;
@@ -116,6 +127,8 @@ function fetchTomorrowWeather(city, apiKey) {
     description: topDesc,
     date: tomorrowStr,
     timeSlots: timeSlots,
+    todayMax: todayMax,
+    todayMin: todayMin,
   };
 }
 
@@ -194,6 +207,12 @@ function buildWeatherEmbed(wd) {
   fields.push({ name: "最高", value: wd.tempMax.toFixed(1) + "\u2103", inline: true });
   fields.push({ name: "最低", value: wd.tempMin.toFixed(1) + "\u2103", inline: true });
   fields.push({ name: "寒暖差", value: (wd.tempMax - wd.tempMin).toFixed(1) + "\u2103", inline: true });
+
+  if (wd.todayMax > -100) {
+    var diffMax = wd.tempMax - wd.todayMax;
+    var diffMin = wd.tempMin - wd.todayMin;
+    fields.push({ name: "前日比", value: "最高 " + (diffMax >= 0 ? "+" : "") + diffMax.toFixed(1) + "\u2103 / 最低 " + (diffMin >= 0 ? "+" : "") + diffMin.toFixed(1) + "\u2103", inline: false });
+  }
 
   return {
     title: "\u{1F324} 明日の天気（" + wd.city + "）",
