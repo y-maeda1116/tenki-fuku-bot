@@ -33,21 +33,39 @@ var categoryEmoji = map[string]string{
 }
 
 var categoryLabel = map[string]string{
-	"men":   "成人男性",
-	"women": "成人女性",
-	"kids":  "子供",
+	"men":   "男性",
+	"women": "女性",
+	"kids":  "子ども",
 }
 
-func buildEmbed(advice outfit.OutfitAdvice, wd *weather.WeatherData) embed {
+func buildWeatherEmbed(wd *weather.WeatherData) embed {
+	fields := []embedField{}
+	for _, slot := range wd.TimeSlots {
+		fields = append(fields, embedField{
+			Name:   slot.Time,
+			Value:  fmt.Sprintf("%s  %.1f℃", slot.Description, slot.Temp),
+			Inline: true,
+		})
+	}
+	fields = append(fields,
+		embedField{Name: "最高", Value: fmt.Sprintf("%.1f℃", wd.TempMax), Inline: true},
+		embedField{Name: "最低", Value: fmt.Sprintf("%.1f℃", wd.TempMin), Inline: true},
+		embedField{Name: "寒暖差", Value: fmt.Sprintf("%.1f℃", wd.TempMax-wd.TempMin), Inline: true},
+	)
+
+	return embed{
+		Title:  fmt.Sprintf("🌤 明日の天気（%s）", wd.City),
+		Color:  outfit.TempColor(wd.TempMax),
+		Fields: fields,
+	}
+}
+
+func buildOutfitEmbed(advice outfit.OutfitAdvice) embed {
 	emoji := categoryEmoji[advice.Category]
 	label := categoryLabel[advice.Category]
 
 	fields := []embedField{
-		{Name: "天気", Value: wd.Description, Inline: false},
 		{Name: "服装", Value: advice.Outfit, Inline: false},
-		{Name: "最高気温", Value: fmt.Sprintf("%.1f℃", advice.TempMax), Inline: true},
-		{Name: "最低気温", Value: fmt.Sprintf("%.1f℃", advice.TempMin), Inline: true},
-		{Name: "寒暖差", Value: fmt.Sprintf("%.1f℃", advice.TempDiff), Inline: true},
 	}
 
 	for _, tip := range advice.AllTips {
@@ -59,17 +77,22 @@ func buildEmbed(advice outfit.OutfitAdvice, wd *weather.WeatherData) embed {
 	}
 
 	return embed{
-		Title:  fmt.Sprintf("%s 明日の%sの服装アドバイス", emoji, label),
+		Title:  fmt.Sprintf("%s %s", emoji, label),
 		Color:  outfit.TempColor(advice.TempMax),
 		Fields: fields,
 	}
 }
 
-func SendWithURL(webhookURL string, advices []outfit.OutfitAdvice, wd *weather.WeatherData) error {
-	embeds := make([]embed, 0, len(advices))
+func buildEmbeds(advices []outfit.OutfitAdvice, wd *weather.WeatherData) []embed {
+	embeds := []embed{buildWeatherEmbed(wd)}
 	for _, a := range advices {
-		embeds = append(embeds, buildEmbed(a, wd))
+		embeds = append(embeds, buildOutfitEmbed(a))
 	}
+	return embeds
+}
+
+func SendWithURL(webhookURL string, advices []outfit.OutfitAdvice, wd *weather.WeatherData) error {
+	embeds := buildEmbeds(advices, wd)
 
 	payload := webhookPayload{Embeds: embeds}
 	body, err := json.Marshal(payload)

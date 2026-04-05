@@ -16,24 +16,31 @@ func TestFetchTomorrow(t *testing.T) {
 		},
 		"list": []map[string]interface{}{
 			{
-				"dt_txt": tomorrow + " 09:00:00",
-				"main":   map[string]interface{}{"temp_max": 22.5, "temp_min": 18.0},
+				"dt_txt": tomorrow + " 06:00:00",
+				"main":   map[string]interface{}{"temp": 15.0},
 				"weather": []map[string]interface{}{
-					{"description": "scattered clouds"},
+					{"description": "薄い雲"},
 				},
 			},
 			{
 				"dt_txt": tomorrow + " 12:00:00",
-				"main":   map[string]interface{}{"temp_max": 26.3, "temp_min": 22.1},
+				"main":   map[string]interface{}{"temp": 22.5},
 				"weather": []map[string]interface{}{
-					{"description": "clear sky"},
+					{"description": "晴れ"},
+				},
+			},
+			{
+				"dt_txt": tomorrow + " 15:00:00",
+				"main":   map[string]interface{}{"temp": 18.3},
+				"weather": []map[string]interface{}{
+					{"description": "くもり"},
 				},
 			},
 			{
 				"dt_txt": tomorrow + " 18:00:00",
-				"main":   map[string]interface{}{"temp_max": 20.0, "temp_min": 15.3},
+				"main":   map[string]interface{}{"temp": 13.0},
 				"weather": []map[string]interface{}{
-					{"description": "clear sky"},
+					{"description": "くもり"},
 				},
 			},
 		},
@@ -62,17 +69,20 @@ func TestFetchTomorrow(t *testing.T) {
 	if data.City != "Tokyo" {
 		t.Errorf("City = %q, want %q", data.City, "Tokyo")
 	}
-	if data.TempMax != 26.3 {
-		t.Errorf("TempMax = %f, want 26.3", data.TempMax)
+	if data.TempMax != 22.5 {
+		t.Errorf("TempMax = %f, want 22.5", data.TempMax)
 	}
-	if data.TempMin != 15.3 {
-		t.Errorf("TempMin = %f, want 15.3", data.TempMin)
+	if data.TempMin != 13.0 {
+		t.Errorf("TempMin = %f, want 13.0", data.TempMin)
 	}
-	if data.Description != "clear sky" {
-		t.Errorf("Description = %q, want %q", data.Description, "clear sky")
+	if len(data.TimeSlots) != 3 {
+		t.Fatalf("len(TimeSlots) = %d, want 3", len(data.TimeSlots))
 	}
-	if data.Date != tomorrow {
-		t.Errorf("Date = %q, want %q", data.Date, tomorrow)
+	if data.TimeSlots[0].Temp != 15.0 {
+		t.Errorf("TimeSlots[0].Temp = %f, want 15.0", data.TimeSlots[0].Temp)
+	}
+	if data.TimeSlots[0].Time != "朝 (7時)" {
+		t.Errorf("TimeSlots[0].Time = %q, want %q", data.TimeSlots[0].Time, "朝 (7時)")
 	}
 }
 
@@ -97,7 +107,7 @@ func TestFetchTomorrow_noDataForTomorrow(t *testing.T) {
 		"list": []map[string]interface{}{
 			{
 				"dt_txt": yesterday + " 12:00:00",
-				"main":   map[string]interface{}{"temp_max": 20.0, "temp_min": 15.0},
+				"main":   map[string]interface{}{"temp": 20.0},
 				"weather": []map[string]interface{}{
 					{"description": "clear sky"},
 				},

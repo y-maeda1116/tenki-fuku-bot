@@ -24,7 +24,16 @@ func TestSend(t *testing.T) {
 	}))
 	defer server.Close()
 
-	wd := &weather.WeatherData{City: "Tokyo", TempMax: 18.0, TempMin: 12.0}
+	wd := &weather.WeatherData{
+		City:    "Tokyo",
+		TempMax: 18.0,
+		TempMin: 12.0,
+		TimeSlots: []weather.TimeSlot{
+			{Time: "朝 (7時)", Description: "晴れ", Temp: 12.0},
+			{Time: "昼 (12時)", Description: "くもり", Temp: 18.0},
+			{Time: "夕 (17時)", Description: "雨", Temp: 14.0},
+		},
+	}
 	advice := []outfit.OutfitAdvice{
 		{
 			Category: "men",
@@ -53,8 +62,9 @@ func TestSend(t *testing.T) {
 	if !ok {
 		t.Fatal("embeds not found in response")
 	}
-	if len(embeds) != 2 {
-		t.Fatalf("len(embeds) = %d, want 2", len(embeds))
+	// 1 weather embed + 2 outfit embeds = 3
+	if len(embeds) != 3 {
+		t.Fatalf("len(embeds) = %d, want 3", len(embeds))
 	}
 }
 
@@ -82,18 +92,42 @@ func TestSend_serverError(t *testing.T) {
 	}
 }
 
-func TestBuildEmbed(t *testing.T) {
-	wd := &weather.WeatherData{City: "Tokyo", TempMax: 18.0, TempMin: 12.0, Description: "薄い雲"}
+func TestBuildWeatherEmbed(t *testing.T) {
+	wd := &weather.WeatherData{
+		City:        "Tokyo",
+		TempMax:     22.5,
+		TempMin:     12.0,
+		Description: "くもり",
+		TimeSlots: []weather.TimeSlot{
+			{Time: "朝 (7時)", Description: "晴れ", Temp: 12.0},
+			{Time: "昼 (12時)", Description: "くもり", Temp: 22.5},
+			{Time: "夕 (17時)", Description: "雨", Temp: 15.0},
+		},
+	}
+
+	embed := buildWeatherEmbed(wd)
+	if embed.Title == "" {
+		t.Error("embed Title is empty")
+	}
+	if embed.Color == 0 {
+		t.Error("embed Color is 0")
+	}
+	if len(embed.Fields) < 6 {
+		t.Errorf("expected at least 6 fields (3 time + 3 temp), got %d", len(embed.Fields))
+	}
+}
+
+func TestBuildOutfitEmbed(t *testing.T) {
 	advice := outfit.OutfitAdvice{
-		Category: "men",
+		Category: "kids",
 		Outfit:   "薄手のジャケット、カーディガン",
-		AllTips:  nil,
+		AllTips:  []string{"活動量を考慮して+1枚多めに着せるのがおすすめ"},
 		TempMax:  18.0,
 		TempMin:  12.0,
 		TempDiff: 6.0,
 	}
 
-	embed := buildEmbed(advice, wd)
+	embed := buildOutfitEmbed(advice)
 	if embed.Title == "" {
 		t.Error("embed Title is empty")
 	}
@@ -104,17 +138,14 @@ func TestBuildEmbed(t *testing.T) {
 		t.Error("embed has no Fields")
 	}
 
-	// Verify weather description field exists
-	found := false
+	// Verify outfit field
+	foundOutfit := false
 	for _, f := range embed.Fields {
-		if f.Name == "天気" {
-			found = true
-			if f.Value != "薄い雲" {
-				t.Errorf("天気 field = %q, want %q", f.Value, "薄い雲")
-			}
+		if f.Name == "服装" {
+			foundOutfit = true
 		}
 	}
-	if !found {
-		t.Error("embed missing 天気 field")
+	if !foundOutfit {
+		t.Error("embed missing 服装 field")
 	}
 }

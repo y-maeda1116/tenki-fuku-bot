@@ -4,6 +4,10 @@
  * 前日20時に翌日の天気予報を取得し、カテゴリー別の服装アドバイスを
  * Discord Webhookで通知するツール。
  *
+ * 通知フォーマット:
+ *   Embed 1: 天気（朝/昼/夕の天気＋気温）
+ *   Embed 2〜: 服装（カテゴリー別、気温なし）
+ *
  * 設定:
  *   1. 下方の CONFIG オブジェクトを編集
  *   2. スクリプトのプロパティに WEATHER_API_KEY, DISCORD_WEBHOOK_URL を設定
@@ -29,16 +33,16 @@ function main() {
   if (!apiKey) throw new Error("WEATHER_API_KEY is not set in script properties");
   if (!webhookUrl) throw new Error("DISCORD_WEBHOOK_URL is not set in script properties");
 
-  var weather = fetchTomorrowWeather(CONFIG.city, apiKey);
-  var advices = generateAdvice(weather, CONFIG.categories);
+  var wd = fetchTomorrowWeather(CONFIG.city, apiKey);
+  var advices = generateAdvice(wd, CONFIG.categories);
 
   if (advices.length === 0) {
     Logger.log("No categories enabled, skipping notification");
     return;
   }
 
-  sendDiscordNotification(webhookUrl, advices, weather);
-  Logger.log("Notification sent for " + weather.city + " tomorrow " + weather.date + " (" + weather.tempMax + "/" + weather.tempMin + ")");
+  sendDiscordNotification(webhookUrl, advices, wd);
+  Logger.log("Notification sent for " + wd.city + " tomorrow " + wd.date);
 }
 
 // --- Weather ---
@@ -67,6 +71,10 @@ function fetchTomorrowWeather(city, apiKey) {
   var topDesc = "";
   var topCount = 0;
 
+  var targetTimes = ["06:00:00", "12:00:00", "15:00:00"];
+  var timeLabels = { "06:00:00": "朝 (7時)", "12:00:00": "昼 (12時)", "15:00:00": "夕 (17時)" };
+  var timeSlots = [];
+
   for (var i = 0; i < data.list.length; i++) {
     var item = data.list[i];
     var dtTxt = item.dt_txt;
@@ -83,6 +91,18 @@ function fetchTomorrowWeather(city, apiKey) {
         topDesc = desc;
       }
     }
+
+    var timePart = dtTxt.substring(11);
+    for (var j = 0; j < targetTimes.length; j++) {
+      if (timePart === targetTimes[j]) {
+        var slotDesc = item.weather.length > 0 ? item.weather[0].description : "";
+        timeSlots.push({
+          time: timeLabels[timePart],
+          description: slotDesc,
+          temp: item.main.temp,
+        });
+      }
+    }
   }
 
   if (maxTemp === -100) {
@@ -95,6 +115,7 @@ function fetchTomorrowWeather(city, apiKey) {
     tempMin: minTemp,
     description: topDesc,
     date: tomorrowStr,
+    timeSlots: timeSlots,
   };
 }
 
@@ -102,38 +123,35 @@ function fetchTomorrowWeather(city, apiKey) {
 
 function selectOutfit(tempMax) {
   if (tempMax < 15) return "厚手のアウター（コート、ダウン）";
-  if (tempMax < 20) return "薄手のジャケット、カーディガン";
+  if (tempMax < 20) return "薄手ジャケット、カーディガン";
   if (tempMax < 25) return "長袖シャツ";
   return "半袖";
 }
 
-function generateAdvice(weather, categories) {
+function generateAdvice(wd, categories) {
   var results = [];
-  var tempDiff = weather.tempMax - weather.tempMin;
+  var tempDiff = wd.tempMax - wd.tempMin;
   var order = ["men", "women", "kids"];
 
   for (var i = 0; i < order.length; i++) {
     var cat = order[i];
     if (!categories[cat]) continue;
 
-    var outfit = selectOutfit(weather.tempMax);
+    var outfit = selectOutfit(wd.tempMax);
     var tips = [];
 
     if (tempDiff >= 10) {
-      tips.push("寒暖差が大きいです。脱ぎ着しやすい服装をおすすめします");
+      tips.push("寒暖差が大きいです。脱ぎ着しやすい服装を");
     }
 
     if (cat === "kids") {
-      tips.push("活動量を考慮して+1枚多めに着せるのがおすすめ");
+      tips.push("活動量を考慮して+1枚多めに");
     }
 
     results.push({
       category: cat,
       outfit: outfit,
       tips: tips,
-      tempMax: weather.tempMax,
-      tempMin: weather.tempMin,
-      tempDiff: tempDiff,
     });
   }
 
@@ -149,9 +167,9 @@ var CATEGORY_EMOJI = {
 };
 
 var CATEGORY_LABEL = {
-  men: "成人男性",
-  women: "成人女性",
-  kids: "子供",
+  men: "男性",
+  women: "女性",
+  kids: "子ども",
 };
 
 function tempColor(tempMax) {
@@ -161,30 +179,48 @@ function tempColor(tempMax) {
   return 0xE74C3C;
 }
 
-function buildEmbed(advice, weather) {
-  var fields = [
-    { name: "天気", value: weather.description, inline: false },
-    { name: "服装", value: advice.outfit, inline: false },
-    { name: "最高気温", value: advice.tempMax.toFixed(1) + "\u2103", inline: true },
-    { name: "最低気温", value: advice.tempMin.toFixed(1) + "\u2103", inline: true },
-    { name: "寒暖差", value: advice.tempDiff.toFixed(1) + "\u2103", inline: true },
-  ];
+function buildWeatherEmbed(wd) {
+  var fields = [];
+
+  for (var i = 0; i < wd.timeSlots.length; i++) {
+    var slot = wd.timeSlots[i];
+    fields.push({
+      name: slot.time,
+      value: slot.description + "  " + slot.temp.toFixed(1) + "\u2103",
+      inline: true,
+    });
+  }
+
+  fields.push({ name: "最高", value: wd.tempMax.toFixed(1) + "\u2103", inline: true });
+  fields.push({ name: "最低", value: wd.tempMin.toFixed(1) + "\u2103", inline: true });
+  fields.push({ name: "寒暖差", value: (wd.tempMax - wd.tempMin).toFixed(1) + "\u2103", inline: true });
+
+  return {
+    title: "\u{1F324} 明日の天気（" + wd.city + "）",
+    color: tempColor(wd.tempMax),
+    fields: fields,
+  };
+}
+
+function buildOutfitEmbed(advice, tempMax) {
+  var fields = [{ name: "服装", value: advice.outfit, inline: false }];
 
   for (var i = 0; i < advice.tips.length; i++) {
     fields.push({ name: "アドバイス", value: advice.tips[i], inline: false });
   }
 
   return {
-    title: CATEGORY_EMOJI[advice.category] + " 明日の" + CATEGORY_LABEL[advice.category] + "の服装アドバイス",
-    color: tempColor(advice.tempMax),
+    title: CATEGORY_EMOJI[advice.category] + " " + CATEGORY_LABEL[advice.category],
+    color: tempColor(tempMax),
     fields: fields,
   };
 }
 
-function sendDiscordNotification(webhookUrl, advices, weather) {
-  var embeds = [];
+function sendDiscordNotification(webhookUrl, advices, wd) {
+  var embeds = [buildWeatherEmbed(wd)];
+
   for (var i = 0; i < advices.length; i++) {
-    embeds.push(buildEmbed(advices[i], weather));
+    embeds.push(buildOutfitEmbed(advices[i], wd.tempMax));
   }
 
   var payload = JSON.stringify({ embeds: embeds });

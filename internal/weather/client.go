@@ -7,19 +7,25 @@ import (
 	"time"
 )
 
+type TimeSlot struct {
+	Time        string
+	Description string
+	Temp        float64
+}
+
 type WeatherData struct {
 	City        string
 	TempMax     float64
 	TempMin     float64
 	Description string
 	Date        string
+	TimeSlots   []TimeSlot
 }
 
 type forecastItem struct {
 	DtTxt   string `json:"dt_txt"`
 	Main    struct {
-		TempMax float64 `json:"temp_max"`
-		TempMin float64 `json:"temp_min"`
+		Temp float64 `json:"temp"`
 	} `json:"main"`
 	Weather []struct {
 		Description string `json:"description"`
@@ -34,6 +40,14 @@ type forecastResponse struct {
 }
 
 const forecastURL = "https://api.openweathermap.org/data/2.5/forecast"
+
+var targetTimes = []string{"06:00:00", "12:00:00", "15:00:00"}
+
+var timeLabels = map[string]string{
+	"06:00:00": "朝 (7時)",
+	"12:00:00": "昼 (12時)",
+	"15:00:00": "夕 (17時)",
+}
 
 // FetchTomorrow fetches tomorrow's weather forecast for the given city.
 func FetchTomorrow(city, apiKey string) (*WeatherData, error) {
@@ -72,18 +86,19 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 	var maxTemp float64 = -100
 	var minTemp float64 = 100
 	descCount := map[string]int{}
-	var topDesc string
+	topDesc := ""
 	topCount := 0
+	var slots []TimeSlot
 
 	for _, item := range fcResp.List {
 		if len(item.DtTxt) < 10 || item.DtTxt[:10] != tomorrow {
 			continue
 		}
-		if item.Main.TempMax > maxTemp {
-			maxTemp = item.Main.TempMax
+		if item.Main.Temp > maxTemp {
+			maxTemp = item.Main.Temp
 		}
-		if item.Main.TempMin < minTemp {
-			minTemp = item.Main.TempMin
+		if item.Main.Temp < minTemp {
+			minTemp = item.Main.Temp
 		}
 		if len(item.Weather) > 0 {
 			d := item.Weather[0].Description
@@ -91,6 +106,21 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 			if descCount[d] > topCount {
 				topCount = descCount[d]
 				topDesc = d
+			}
+		}
+
+		timePart := item.DtTxt[11:]
+		for _, tt := range targetTimes {
+			if timePart == tt {
+				desc := ""
+				if len(item.Weather) > 0 {
+					desc = item.Weather[0].Description
+				}
+				slots = append(slots, TimeSlot{
+					Time:        timeLabels[tt],
+					Description: desc,
+					Temp:        item.Main.Temp,
+				})
 			}
 		}
 	}
@@ -105,5 +135,6 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 		TempMin:     minTemp,
 		Description: topDesc,
 		Date:        tomorrow,
+		TimeSlots:   slots,
 	}, nil
 }
