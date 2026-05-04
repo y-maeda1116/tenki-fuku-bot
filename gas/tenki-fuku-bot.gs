@@ -290,7 +290,7 @@ function postWithRetry(url, payload, attempt) {
     var retryAfter = 5000;
     var headers = response.getHeaders();
     if (headers["Retry-After"]) {
-      retryAfter = parseInt(headers["Retry-After"], 10) * 1000;
+      retryAfter = Math.min(parseInt(headers["Retry-After"], 10) * 1000, 10000);
     }
     Logger.log("Rate limited (429), retrying after " + retryAfter + "ms (attempt " + attempt + ")");
     Utilities.sleep(retryAfter);
