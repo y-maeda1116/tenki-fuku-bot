@@ -243,8 +243,19 @@ function sendDiscordNotification(webhookUrl, advices, wd) {
   }
 
   var payload = JSON.stringify({ embeds: embeds });
+  var response = postWithRetry(webhookUrl, payload);
 
-  var response = UrlFetchApp.fetch(webhookUrl, {
+  var code = response.getResponseCode();
+  if (code !== 204 && code !== 200) {
+    throw new Error("Discord webhook returned status " + code + ": " + response.getContentText());
+  }
+}
+
+function postWithRetry(url, payload, attempt) {
+  var maxAttempts = 2;
+  attempt = attempt || 1;
+
+  var response = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
     payload: payload,
@@ -252,7 +263,17 @@ function sendDiscordNotification(webhookUrl, advices, wd) {
   });
 
   var code = response.getResponseCode();
-  if (code !== 204 && code !== 200) {
-    throw new Error("Discord webhook returned status " + code + ": " + response.getContentText());
+
+  if (code === 429 && attempt < maxAttempts) {
+    var retryAfter = 5000;
+    var headers = response.getHeaders();
+    if (headers["Retry-After"]) {
+      retryAfter = parseInt(headers["Retry-After"], 10) * 1000;
+    }
+    Logger.log("Rate limited (429), retrying after " + retryAfter + "ms (attempt " + attempt + ")");
+    Utilities.sleep(retryAfter);
+    return postWithRetry(url, payload, attempt + 1);
   }
+
+  return response;
 }
