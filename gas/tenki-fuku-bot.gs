@@ -47,9 +47,31 @@ function main() {
 
 // --- Weather ---
 
+var WEATHER_EMOJI = {
+  "晴れ": "☀️",
+  "晴れの時々曇り": "⛅",
+  "曇り時々晴れ": "⛅",
+  "曇り": "☁️",
+  "薄い曇": "⛅",
+  "小雨": "🌧️",
+  "雨": "🌧️",
+  "強い雨": "🌧️",
+  "雷雨": "⛈️",
+  "雪": "❄️",
+  "小雪": "🌨️",
+  "大雪": "❄️",
+  "霧": "🌫️",
+  "砂潼れ": "🌪️",
+};
+
+function formatWeatherDesc(desc) {
+  var emoji = WEATHER_EMOJI[desc];
+  return emoji ? emoji + " " + desc : desc;
+}
+
 function fetchTomorrowWeather(city, apiKey) {
   var url = "https://api.openweathermap.org/data/2.5/forecast?q=" + encodeURIComponent(city) +
-    "&appid=" + encodeURIComponent(apiKey) + "&units=metric";
+    "&appid=" + encodeURIComponent(apiKey) + "&units=metric&lang=ja";
 
   var response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   var code = response.getResponseCode();
@@ -106,7 +128,7 @@ function fetchTomorrowWeather(city, apiKey) {
     var timePart = dtTxt.substring(11);
     for (var j = 0; j < targetTimes.length; j++) {
       if (timePart === targetTimes[j]) {
-        var slotDesc = item.weather.length > 0 ? item.weather[0].description : "";
+        var slotDesc = item.weather.length > 0 ? formatWeatherDesc(item.weather[0].description) : "";
         timeSlots.push({
           time: timeLabels[timePart],
           description: slotDesc,
