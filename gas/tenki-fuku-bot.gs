@@ -269,8 +269,10 @@ function sendDiscordNotification(webhookUrl, advices, wd) {
 
   var code = response.getResponseCode();
   if (code !== 204 && code !== 200) {
-    throw new Error("Discord webhook returned status " + code + ": " + response.getContentText());
+    Logger.log("Discord webhook failed with status " + code + ": " + response.getContentText());
+    return;
   }
+  Logger.log("Notification sent successfully");
 }
 
 function postWithRetry(url, payload, attempt) {
