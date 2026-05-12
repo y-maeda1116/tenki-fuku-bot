@@ -285,7 +285,8 @@ function sendDiscordNotification(webhookUrl, advices, wd) {
 }
 
 function postWithRetry(url, payload, attempt) {
-  var maxAttempts = 2;
+  var maxAttempts = 4;
+  var delays = [5000, 15000, 30000];
   attempt = attempt || 1;
 
   var response = UrlFetchApp.fetch(url, {
@@ -298,12 +299,12 @@ function postWithRetry(url, payload, attempt) {
   var code = response.getResponseCode();
 
   if (code === 429 && attempt < maxAttempts) {
-    var retryAfter = 5000;
+    var retryAfter = delays[attempt - 1] || 30000;
     var headers = response.getHeaders();
     if (headers["Retry-After"]) {
-      retryAfter = Math.min(parseInt(headers["Retry-After"], 10) * 1000, 10000);
+      retryAfter = Math.min(parseInt(headers["Retry-After"], 10) * 1000, retryAfter);
     }
-    Logger.log("Rate limited (429), retrying after " + retryAfter + "ms (attempt " + attempt + ")");
+    Logger.log("Rate limited (429), retrying after " + retryAfter + "ms (attempt " + attempt + "/" + maxAttempts + ")");
     Utilities.sleep(retryAfter);
     return postWithRetry(url, payload, attempt + 1);
   }
