@@ -16,7 +16,8 @@
  */
 
 var CONFIG = {
-  city: "Tokyo",
+  areaCode: "130000",
+  areaName: "東京地方",
   categories: {
     men: true,
     women: true,
@@ -27,13 +28,11 @@ var CONFIG = {
 // --- Main ---
 
 function main() {
-  var apiKey = PropertiesService.getScriptProperties().getProperty("WEATHER_API_KEY");
   var webhookUrl = PropertiesService.getScriptProperties().getProperty("DISCORD_WEBHOOK_URL");
 
-  if (!apiKey) throw new Error("WEATHER_API_KEY is not set in script properties");
   if (!webhookUrl) throw new Error("DISCORD_WEBHOOK_URL is not set in script properties");
 
-  var wd = fetchTomorrowWeather(CONFIG.city, apiKey);
+  var wd = fetchTomorrowWeather(CONFIG.areaCode, CONFIG.areaName);
   var advices = generateAdvice(wd, CONFIG.categories);
 
   if (advices.length === 0) {
@@ -49,19 +48,20 @@ function main() {
 
 var WEATHER_EMOJI = {
   "晴れ": "☀️",
-  "晴れの時々曇り": "⛅",
-  "曇り時々晴れ": "⛅",
+  "晴時々曇": "⛅",
+  "曇時々晴": "⛅",
   "曇り": "☁️",
   "薄い曇": "⛅",
-  "小雨": "🌧️",
   "雨": "🌧️",
+  "小雨": "🌧️",
   "強い雨": "🌧️",
   "雷雨": "⛈️",
   "雪": "❄️",
   "小雪": "🌨️",
   "大雪": "❄️",
   "霧": "🌫️",
-  "砂潼れ": "🌪️",
+  "暴風雨": "🌪️",
+  "暴風雪": "🌪️",
 };
 
 function formatWeatherDesc(desc) {
@@ -69,84 +69,97 @@ function formatWeatherDesc(desc) {
   return emoji ? emoji + " " + desc : desc;
 }
 
-function fetchTomorrowWeather(city, apiKey) {
-  var url = "https://api.openweathermap.org/data/2.5/forecast?q=" + encodeURIComponent(city) +
-    "&appid=" + encodeURIComponent(apiKey) + "&units=metric&lang=ja";
+function fetchTomorrowWeather(areaCode, areaName) {
+  var url = "https://www.jma.go.jp/bosai/forecast/data/forecast/" + areaCode + ".json";
 
   var response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   var code = response.getResponseCode();
 
   if (code !== 200) {
-    throw new Error("Forecast API returned status " + code + ": " + response.getContentText());
+    throw new Error("JMA forecast API returned status " + code + ": " + response.getContentText());
   }
 
   var data = JSON.parse(response.getContentText());
-  var cityName = data.city.name;
+  var report = data[0];
+  var timeSeries = report.timeSeries;
 
   var today = new Date();
   var tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  var todayStr = Utilities.formatDate(today, "JST", "yyyy-MM-dd");
   var tomorrowStr = Utilities.formatDate(tomorrow, "JST", "yyyy-MM-dd");
 
-  var maxTemp = -100;
-  var minTemp = 100;
+  var tempMax = -100;
+  var tempMin = 100;
   var todayMax = -100;
   var todayMin = 100;
-  var descCount = {};
-  var topDesc = "";
-  var topCount = 0;
-
-  var targetTimes = ["06:00:00", "12:00:00", "15:00:00"];
-  var timeLabels = { "06:00:00": "朝 (7時)", "12:00:00": "昼 (12時)", "15:00:00": "夕 (17時)" };
   var timeSlots = [];
 
-  for (var i = 0; i < data.list.length; i++) {
-    var item = data.list[i];
-    var dtTxt = item.dt_txt;
-    var datePart = dtTxt.substring(0, 10);
+  for (var s = 0; s < timeSeries.length; s++) {
+    var series = timeSeries[s];
+    var timeDefines = series.timeDefines;
+    var areas = series.areas;
 
-    if (datePart === todayStr) {
-      if (item.main.temp_max > todayMax) todayMax = item.main.temp_max;
-      if (item.main.temp_min < todayMin) todayMin = item.main.temp_min;
-    }
+    for (var a = 0; a < areas.length; a++) {
+      if (areas[a].area.name !== areaName) continue;
 
-    if (datePart !== tomorrowStr) continue;
+      if (series.areas[a].temps) {
+        for (var t = 0; t < timeDefines.length; t++) {
+          var dateStr = timeDefines[t].substring(0, 10);
+          var temps = series.areas[a].temps;
 
-    if (item.main.temp_max > maxTemp) maxTemp = item.main.temp_max;
-    if (item.main.temp_min < minTemp) minTemp = item.main.temp_min;
-
-    if (item.weather.length > 0) {
-      var desc = item.weather[0].description;
-      descCount[desc] = (descCount[desc] || 0) + 1;
-      if (descCount[desc] > topCount) {
-        topCount = descCount[desc];
-        topDesc = desc;
+          if (dateStr === tomorrowStr && temps.length > t) {
+            var hi = parseFloat(temps[t]);
+            var lo = parseFloat(temps[t]);
+            if (temps.length > t + 1) {
+              hi = Math.max(parseFloat(temps[t]), parseFloat(temps[t + 1]));
+              lo = Math.min(parseFloat(temps[t]), parseFloat(temps[t + 1]));
+            }
+            if (hi > tempMax) tempMax = hi;
+            if (lo < tempMin) tempMin = lo;
+          }
+          if (dateStr === Utilities.formatDate(today, "JST", "yyyy-MM-dd") && temps.length > t) {
+            var thi = parseFloat(temps[t]);
+            var tlo = parseFloat(temps[t]);
+            if (temps.length > t + 1) {
+              thi = Math.max(parseFloat(temps[t]), parseFloat(temps[t + 1]));
+              tlo = Math.min(parseFloat(temps[t]), parseFloat(temps[t + 1]));
+            }
+            if (thi > todayMax) todayMax = thi;
+            if (tlo < todayMin) todayMin = tlo;
+          }
+        }
       }
-    }
 
-    var timePart = dtTxt.substring(11);
-    for (var j = 0; j < targetTimes.length; j++) {
-      if (timePart === targetTimes[j]) {
-        var slotDesc = item.weather.length > 0 ? formatWeatherDesc(item.weather[0].description) : "";
-        timeSlots.push({
-          time: timeLabels[timePart],
-          description: slotDesc,
-          temp: item.main.temp,
-        });
+      if (series.areas[a].weathers) {
+        var weathers = series.areas[a].weathers;
+        var weatherTimes = timeDefines;
+        for (var w = 0; w < weatherTimes.length; w++) {
+          var wDate = weatherTimes[w].substring(0, 10);
+          if (wDate !== tomorrowStr) continue;
+          var slotLabel = "";
+          if (w === 0) slotLabel = "朝〜昼";
+          else if (w === 1) slotLabel = "昼〜夕";
+          else if (w === 2) slotLabel = "夕〜夜";
+          else slotLabel = "時間帯" + (w + 1);
+          if (weathers.length > w && weathers[w]) {
+            timeSlots.push({
+              time: slotLabel,
+              description: formatWeatherDesc(weathers[w]),
+            });
+          }
+        }
       }
     }
   }
 
-  if (maxTemp === -100) {
+  if (tempMax === -100) {
     throw new Error("No forecast data available for tomorrow (" + tomorrowStr + ")");
   }
 
   return {
-    city: cityName,
-    tempMax: maxTemp,
-    tempMin: minTemp,
-    description: topDesc,
+    city: areaName,
+    tempMax: tempMax,
+    tempMin: tempMin,
     date: tomorrowStr,
     timeSlots: timeSlots,
     todayMax: todayMax,
@@ -221,7 +234,7 @@ function buildWeatherEmbed(wd) {
     var slot = wd.timeSlots[i];
     fields.push({
       name: slot.time,
-      value: slot.description + "  " + slot.temp.toFixed(1) + "\u2103",
+      value: slot.description,
       inline: true,
     });
   }
