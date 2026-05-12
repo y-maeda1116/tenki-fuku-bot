@@ -10,14 +10,16 @@
  *
  * 設定:
  *   1. 下方の CONFIG オブジェクトを編集
- *   2. スクリプトのプロパティに WEATHER_API_KEY, DISCORD_WEBHOOK_URL を設定
+ *   2. スクリプトのプロパティに DISCORD_WEBHOOK_URL を設定
  *      （プロジェクトの設定 > スクリプトプロパティ）
  *   3. トリガーを設定: 毎日 20:00〜21:00 に実行
+ *   気象データは気象庁API（api.jma.go.jp）を使用。APIキー不要。
  */
 
 var CONFIG = {
   areaCode: "130000",
-  areaName: "東京地方",
+  weatherArea: "東京地方",
+  tempArea: "東京",
   categories: {
     men: true,
     women: true,
@@ -32,7 +34,7 @@ function main() {
 
   if (!webhookUrl) throw new Error("DISCORD_WEBHOOK_URL is not set in script properties");
 
-  var wd = fetchTomorrowWeather(CONFIG.areaCode, CONFIG.areaName);
+  var wd = fetchTomorrowWeather(CONFIG.areaCode, CONFIG.weatherArea, CONFIG.tempArea);
   var advices = generateAdvice(wd, CONFIG.categories);
 
   if (advices.length === 0) {
@@ -69,7 +71,7 @@ function formatWeatherDesc(desc) {
   return emoji ? emoji + " " + desc : desc;
 }
 
-function fetchTomorrowWeather(areaCode, areaName) {
+function fetchTomorrowWeather(areaCode, weatherArea, tempArea) {
   var url = "https://www.jma.go.jp/bosai/forecast/data/forecast/" + areaCode + ".json";
 
   var response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
@@ -80,76 +82,70 @@ function fetchTomorrowWeather(areaCode, areaName) {
   }
 
   var data = JSON.parse(response.getContentText());
-  var report = data[0];
-  var timeSeries = report.timeSeries;
 
   var today = new Date();
   var tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
+  var todayStr = Utilities.formatDate(today, "JST", "yyyy-MM-dd");
   var tomorrowStr = Utilities.formatDate(tomorrow, "JST", "yyyy-MM-dd");
 
-  var tempMax = -100;
-  var tempMin = 100;
-  var todayMax = -100;
-  var todayMin = 100;
+  // data[0]: short-term forecast (today + tomorrow)
+  var shortTerm = data[0].timeSeries;
+
+  // data[1]: weekly forecast
+  var weekly = data[1].timeSeries;
+
+  // --- Tomorrow's weather (timeSeries[0], area: weatherArea) ---
   var timeSlots = [];
-
-  for (var s = 0; s < timeSeries.length; s++) {
-    var series = timeSeries[s];
-    var timeDefines = series.timeDefines;
-    var areas = series.areas;
-
-    for (var a = 0; a < areas.length; a++) {
-      if (areas[a].area.name !== areaName) continue;
-
-      if (series.areas[a].temps) {
-        for (var t = 0; t < timeDefines.length; t++) {
-          var dateStr = timeDefines[t].substring(0, 10);
-          var temps = series.areas[a].temps;
-
-          if (dateStr === tomorrowStr && temps.length > t) {
-            var hi = parseFloat(temps[t]);
-            var lo = parseFloat(temps[t]);
-            if (temps.length > t + 1) {
-              hi = Math.max(parseFloat(temps[t]), parseFloat(temps[t + 1]));
-              lo = Math.min(parseFloat(temps[t]), parseFloat(temps[t + 1]));
-            }
-            if (hi > tempMax) tempMax = hi;
-            if (lo < tempMin) tempMin = lo;
-          }
-          if (dateStr === Utilities.formatDate(today, "JST", "yyyy-MM-dd") && temps.length > t) {
-            var thi = parseFloat(temps[t]);
-            var tlo = parseFloat(temps[t]);
-            if (temps.length > t + 1) {
-              thi = Math.max(parseFloat(temps[t]), parseFloat(temps[t + 1]));
-              tlo = Math.min(parseFloat(temps[t]), parseFloat(temps[t + 1]));
-            }
-            if (thi > todayMax) todayMax = thi;
-            if (tlo < todayMin) todayMin = tlo;
-          }
-        }
-      }
-
-      if (series.areas[a].weathers) {
-        var weathers = series.areas[a].weathers;
-        var weatherTimes = timeDefines;
-        for (var w = 0; w < weatherTimes.length; w++) {
-          var wDate = weatherTimes[w].substring(0, 10);
-          if (wDate !== tomorrowStr) continue;
-          var slotLabel = "";
-          if (w === 0) slotLabel = "朝〜昼";
-          else if (w === 1) slotLabel = "昼〜夕";
-          else if (w === 2) slotLabel = "夕〜夜";
-          else slotLabel = "時間帯" + (w + 1);
-          if (weathers.length > w && weathers[w]) {
-            timeSlots.push({
-              time: slotLabel,
-              description: formatWeatherDesc(weathers[w]),
-            });
-          }
-        }
+  var ts0 = shortTerm[0];
+  for (var a = 0; a < ts0.areas.length; a++) {
+    if (ts0.areas[a].area.name !== weatherArea) continue;
+    var weathers = ts0.areas[a].weathers;
+    for (var w = 0; w < ts0.timeDefines.length; w++) {
+      var wDate = ts0.timeDefines[w].substring(0, 10);
+      if (wDate !== tomorrowStr) continue;
+      var slotLabel = "";
+      if (w === 0) slotLabel = "朝〜昼";
+      else if (w === 1) slotLabel = "昼〜夕";
+      else if (w === 2) slotLabel = "夕〜夜";
+      else slotLabel = "時間帯" + (w + 1);
+      if (weathers.length > w && weathers[w]) {
+        timeSlots.push({ time: slotLabel, description: formatWeatherDesc(weathers[w]) });
       }
     }
+    break;
+  }
+
+  // --- Tomorrow's temps (timeSeries[2], area: tempArea) ---
+  // temps: [最低気温, 最高気温]
+  var tempMax = -100;
+  var tempMin = 100;
+  var ts2 = shortTerm[2];
+  for (var a2 = 0; a2 < ts2.areas.length; a2++) {
+    if (ts2.areas[a2].area.name !== tempArea) continue;
+    var temps = ts2.areas[a2].temps;
+    if (temps.length >= 2) {
+      tempMin = parseFloat(temps[0]);
+      tempMax = parseFloat(temps[1]);
+    }
+    break;
+  }
+
+  // --- Today's temps for diff (weekly data timeSeries[1], area: tempArea) ---
+  var todayMax = -100;
+  var todayMin = 100;
+  var wTs1 = weekly[1];
+  for (var wa = 0; wa < wTs1.areas.length; wa++) {
+    if (wTs1.areas[wa].area.name !== tempArea) continue;
+    var mins = wTs1.areas[wa].tempsMin || [];
+    var maxs = wTs1.areas[wa].tempsMax || [];
+    for (var wt = 0; wt < wTs1.timeDefines.length; wt++) {
+      if (wTs1.timeDefines[wt].substring(0, 10) === todayStr) {
+        if (maxs.length > wt && maxs[wt] !== "") todayMax = parseFloat(maxs[wt]);
+        if (mins.length > wt && mins[wt] !== "") todayMin = parseFloat(mins[wt]);
+      }
+    }
+    break;
   }
 
   if (tempMax === -100) {
@@ -157,7 +153,7 @@ function fetchTomorrowWeather(areaCode, areaName) {
   }
 
   return {
-    city: areaName,
+    city: weatherArea,
     tempMax: tempMax,
     tempMin: tempMin,
     date: tomorrowStr,
