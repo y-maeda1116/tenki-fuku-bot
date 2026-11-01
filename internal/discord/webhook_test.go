@@ -29,9 +29,9 @@ func TestSend(t *testing.T) {
 		TempMax: 18.0,
 		TempMin: 12.0,
 		TimeSlots: []weather.TimeSlot{
-			{Time: "朝 (7時)", Description: "晴れ", Temp: 12.0},
+			{Time: "朝 (9時)", Description: "晴れ", Temp: 12.0},
 			{Time: "昼 (12時)", Description: "くもり", Temp: 18.0},
-			{Time: "夕 (17時)", Description: "雨", Temp: 14.0},
+			{Time: "夕 (18時)", Description: "雨", Temp: 14.0},
 		},
 	}
 	advice := []outfit.OutfitAdvice{
@@ -99,9 +99,9 @@ func TestBuildWeatherEmbed(t *testing.T) {
 		TempMin:     12.0,
 		Description: "くもり",
 		TimeSlots: []weather.TimeSlot{
-			{Time: "朝 (7時)", Description: "晴れ", Temp: 12.0},
+			{Time: "朝 (9時)", Description: "晴れ", Temp: 12.0},
 			{Time: "昼 (12時)", Description: "くもり", Temp: 22.5},
-			{Time: "夕 (17時)", Description: "雨", Temp: 15.0},
+			{Time: "夕 (18時)", Description: "雨", Temp: 15.0},
 		},
 	}
 

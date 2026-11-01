@@ -25,8 +25,8 @@ type WeatherData struct {
 }
 
 type forecastItem struct {
-	DtTxt   string `json:"dt_txt"`
-	Main    struct {
+	DtTxt string `json:"dt_txt"`
+	Main  struct {
 		Temp float64 `json:"temp"`
 	} `json:"main"`
 	Weather []struct {
@@ -43,12 +43,18 @@ type forecastResponse struct {
 
 const forecastURL = "https://api.openweathermap.org/data/2.5/forecast"
 
-var targetTimes = []string{"06:00:00", "12:00:00", "15:00:00"}
+// jst は日本標準時 (UTC+9)。日本にサマータイムはないため固定オフセットで足りる。
+var jst = time.FixedZone("JST", 9*60*60)
 
-var timeLabels = map[string]string{
-	"06:00:00": "朝 (7時)",
-	"12:00:00": "昼 (12時)",
-	"15:00:00": "夕 (17時)",
+// targetSlots は通知する JST の時間帯とラベル。OpenWeatherMap の予報は
+// 3時間刻み (JST の 0/3/6/9/12/15/18/21時) のため、7時/17時ちょうどは取れない。
+var targetSlots = []struct {
+	hour  int
+	label string
+}{
+	{9, "朝 (9時)"},
+	{12, "昼 (12時)"},
+	{18, "夕 (18時)"},
 }
 
 // FetchTomorrow fetches tomorrow's weather forecast for the given city.
@@ -83,8 +89,10 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 		return nil, fmt.Errorf("decoding forecast response: %w", err)
 	}
 
-	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
-	today := time.Now().Format("2006-01-02")
+	// 今日/明日は JST 基準で判定する (dt_txt は UTC のため JST に変換して比較)
+	now := time.Now().In(jst)
+	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+	today := now.Format("2006-01-02")
 
 	var maxTemp float64 = -100
 	var minTemp float64 = 100
@@ -96,10 +104,12 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 	var slots []TimeSlot
 
 	for _, item := range fcResp.List {
-		if len(item.DtTxt) < 10 {
+		jstTime, err := time.ParseInLocation("2006-01-02 15:04:05", item.DtTxt, time.UTC)
+		if err != nil {
 			continue
 		}
-		datePart := item.DtTxt[:10]
+		jstTime = jstTime.In(jst)
+		datePart := jstTime.Format("2006-01-02")
 
 		if datePart == today {
 			if item.Main.Temp > todayMax {
@@ -128,15 +138,14 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 			}
 		}
 
-		timePart := item.DtTxt[11:]
-		for _, tt := range targetTimes {
-			if timePart == tt {
+		for _, s := range targetSlots {
+			if jstTime.Hour() == s.hour {
 				desc := ""
 				if len(item.Weather) > 0 {
 					desc = item.Weather[0].Description
 				}
 				slots = append(slots, TimeSlot{
-					Time:        timeLabels[tt],
+					Time:        s.label,
 					Description: desc,
 					Temp:        item.Main.Temp,
 				})
