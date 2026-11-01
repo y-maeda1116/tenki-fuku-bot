@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-var testJST = time.FixedZone("JST", 9*60*60)
+// testJST は本番コードと同じ JST ゾーンを参照する (single source of truth)
+var testJST = jst
 
 // dtTxtUTC は JST 時刻を OpenWeatherMap の dt_txt 形式 (UTC) に変換する
 func dtTxtUTC(t time.Time) string {
