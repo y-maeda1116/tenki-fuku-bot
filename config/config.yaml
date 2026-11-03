@@ -1,4 +1,8 @@
-city: "Tokyo"
+# JMA (気象庁) の地方コードとエリア名
+# コード一覧: https://www.jma.go.jp/bosai/common/const/area.json
+areaCode: "130000"       # 東京
+weatherArea: "東京地方"   # 天気を取得するエリア名
+tempArea: "東京"          # 気温を取得するエリア名
 categories:
   men: true
   women: true

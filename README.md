@@ -1,13 +1,12 @@
 # Tenki Fuku Bot
 
-前日20時に OpenWeatherMap の5日予報API から翌日の気温情報を取得し、成人男性・成人女性・子供それぞれに最適化された服装アドバイスを Discord Webhook で通知するツールです。
+前日20時に気象庁 (JMA) の予報API から翌日の気温情報を取得し、成人男性・成人女性・子供それぞれに最適化された服装アドバイスを Discord Webhook で通知するツールです。
 
 ## 仕組み
 
-1. OpenWeatherMap 5日予報API（`/data/2.5/forecast`）から翌日の3時間毎の予報データを取得
-2. 療日の全エントリから最高気温・最低気温を算出し、最頻出の天気概況を特定
-3. 気温に基づいてカテゴリー別の服装アドバイスを生成
-4. Discord Webhook の Embeds 形式で通知
+1. 気象庁予報API（`/bosai/forecast/data/forecast/{areaCode}.json`、APIキー不要）から翌日の天気と今日/明日の最高・最低気温を取得
+2. 気温に基づいてカテゴリー別の服装アドバイスを生成
+3. Discord Webhook の Embeds 形式で通知
 
 ```
 [20:00 JST]  Fetch Tomorrow's Forecast  →  Generate Advice  →  Send to Discord
@@ -40,13 +39,13 @@ Discord 通知の Embed カラー:
 ├── config/config.yaml          # 設定ファイル（都市・カテゴリ）
 ├── internal/
 │   ├── config/config.go        # YAML設定読み込み
-│   ├── weather/client.go       # OpenWeatherMap 5日予報API クライアント
+│   ├── weather/client.go       # 気象庁 (JMA) 予報API クライアント
 │   ├── outfit/advisor.go       # 服装判定ロジック
 │   └── discord/webhook.go      # Discord Webhook 通知（Embeds）
 ├── gas/
 │   └── tenki-fuku-bot.gs       # Google Apps Script 版（シングルファイル）
 ├── .github/workflows/
-│   ├── notify.yml              # 毎晩 JST 20:00 に翌日通知（デフォルト無効）
+│   ├── notify.yml              # 毎晩 JST 20:00 に翌日通知
 │   └── test.yml                # テスト CI
 ├── Makefile
 └── go.mod
@@ -57,10 +56,7 @@ Discord 通知の Embed カラー:
 ### 前提条件
 
 - Go 1.26 or later
-- [OpenWeatherMap API キー](https://openweathermap.org/api)）（Free plan で対応）
 - [Discord Webhook URL](https://support.discord.com/hc/ja/articles/228383949-Webhook%E3%82%E8%E3%82)
-
-)
 
 ### インストール
 
@@ -72,10 +68,12 @@ go mod download
 
 ### 設定
 
-1. `config/config.yaml` で都市とカテゴリーを設定:
+1. `config/config.yaml` で JMA の地方コードとエリア名、カテゴリーを設定:
 
 ```yaml
-city: "Tokyo"
+areaCode: "130000"       # 東京
+weatherArea: "東京地方"
+tempArea: "東京"
 categories:
   men: true
   women: true
@@ -85,7 +83,6 @@ categories:
 2. 環境変数を設定:
 
 ```bash
-export WEATHER_API_KEY="your-openweathermap-api-key"
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 ```
 
@@ -116,25 +113,23 @@ make lint              # Lint
 ### GitHub Actions
 
 - **テスト**: push/PR 時に自動実行（`.github/workflows/test.yml`）
-- **通知**: 毎晩 JST 20:00（UTC 11:00）に翌日の予報を自動通知（`.github/workflows/notify.yml`）
-  - デフォルトでは cron がコメントアウトされており、`workflow_dispatch` で手動実行のみ可能
-  - cron を有効にするには `notify.yml` のコメントを外して push してください
+- **通知**: 毎晩 JST 20:00（UTC 11:00）に翌日の予報を自動通知（`.github/workflows/notify.yml`、`workflow_dispatch` での手動実行も可能）
 
 GitHub リポジトリの **Settings > Secrets and variables > Actions** で以下を設定:
 
-- `WEATHER_API_KEY` — OpenWeatherMap の API キー
 - `DISCORD_WEBHOOK_URL` — Discord Webhook URL
 
 ### Google Apps Script 版
 
-GitHub Actions の cron が不安定な場合の代替手段。ロジックは Go 版と同一。
+GitHub Actions 版の代替手段。ロジックは Go 版と同一（気象庁 API 使用、API キー不要）。
 
 1. [Google Apps Script](https://script.google.com/) で新規プロジェクトを作成
 2. `gas/tenki-fuku-bot.gs` の内容をコピペ
 3. **スクリプトプロパティ**（プロジェクトの設定 > スクリプトプロパティ）に設定:
-   - `WEATHER_API_KEY` — OpenWeatherMap の API キー
    - `DISCORD_WEBHOOK_URL` — Discord Webhook URL
 4. **トリガー設定**: 関数 `main` を時間主導型 > 日付ベースのタイマー > 午後 8時〜9時
+
+> 注意: GitHub Actions 版と GAS 版の両方でトリガーを有効にすると、Discord に同じ通知が2回届きます。どちらか一方のみ有効にしてください。
 
 ## License
 

@@ -40,6 +40,9 @@ var categoryLabel = map[string]string{
 
 func buildWeatherEmbed(wd *weather.WeatherData) embed {
 	fields := []embedField{}
+	if wd.WeatherText != "" {
+		fields = append(fields, embedField{Name: "天気", Value: wd.WeatherText, Inline: false})
+	}
 	for _, slot := range wd.TimeSlots {
 		fields = append(fields, embedField{
 			Name:   slot.Time,

@@ -18,10 +18,6 @@ func main() {
 }
 
 func run() error {
-	apiKey := os.Getenv("WEATHER_API_KEY")
-	if apiKey == "" {
-		return fmt.Errorf("WEATHER_API_KEY is not set")
-	}
 	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
 	if webhookURL == "" {
 		return fmt.Errorf("DISCORD_WEBHOOK_URL is not set")
@@ -32,7 +28,7 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	wd, err := weather.FetchTomorrow(cfg.City, apiKey)
+	wd, err := weather.FetchTomorrow(cfg.AreaCode, cfg.WeatherArea, cfg.TempArea)
 	if err != nil {
 		return fmt.Errorf("fetching weather: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,61 +19,49 @@ type WeatherData struct {
 	TempMax     float64
 	TempMin     float64
 	Description string
+	WeatherText string
 	Date        string
 	TimeSlots   []TimeSlot
 	TodayMax    float64
 	TodayMin    float64
 }
 
-type forecastItem struct {
-	DtTxt string `json:"dt_txt"`
-	Main  struct {
-		Temp float64 `json:"temp"`
-	} `json:"main"`
-	Weather []struct {
-		Description string `json:"description"`
-	} `json:"weather"`
-}
-
-type forecastResponse struct {
-	City struct {
-		Name string `json:"name"`
-	} `json:"city"`
-	List []forecastItem `json:"list"`
-}
-
-const forecastURL = "https://api.openweathermap.org/data/2.5/forecast"
-
 // jst は日本標準時 (UTC+9)。日本にサマータイムはないため固定オフセットで足りる。
 var jst = time.FixedZone("JST", 9*60*60)
 
-// targetSlots は通知する JST の時間帯とラベル。OpenWeatherMap の予報は
-// 3時間刻み (JST の 0/3/6/9/12/15/18/21時) のため、7時/17時ちょうどは取れない。
-var targetSlots = []struct {
-	hour  int
-	label string
-}{
-	{9, "朝 (9時)"},
-	{12, "昼 (12時)"},
-	{18, "夕 (18時)"},
+const forecastURLBase = "https://www.jma.go.jp/bosai/forecast/data/forecast"
+
+// JMA forecast API のレスポンス (必要なフィールドのみ)
+type jmaReport struct {
+	TimeSeries []jmaTimeSeries `json:"timeSeries"`
 }
 
-// FetchTomorrow fetches tomorrow's weather forecast for the given city.
-func FetchTomorrow(city, apiKey string) (*WeatherData, error) {
-	return FetchTomorrowWithURL(forecastURL, city, apiKey)
+type jmaTimeSeries struct {
+	TimeDefines []string  `json:"timeDefines"`
+	Areas       []jmaArea `json:"areas"`
+}
+
+type jmaArea struct {
+	Area struct {
+		Name string `json:"name"`
+	} `json:"area"`
+	Weathers []string `json:"weathers"`
+	Temps    []string `json:"temps"`
+}
+
+// FetchTomorrow fetches tomorrow's weather forecast for the given JMA area code.
+// 天気は weatherArea (例: 東京地方)、気温は tempArea (例: 東京) のエリア名で取得する。
+func FetchTomorrow(areaCode, weatherArea, tempArea string) (*WeatherData, error) {
+	apiURL := fmt.Sprintf("%s/%s.json", forecastURLBase, areaCode)
+	return FetchTomorrowWithURL(apiURL, areaCode, weatherArea, tempArea)
 }
 
 // FetchTomorrowWithURL fetches tomorrow's forecast using a custom API URL (for testing).
-func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
+func FetchTomorrowWithURL(apiURL, areaCode, weatherArea, tempArea string) (*WeatherData, error) {
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
-	q := req.URL.Query()
-	q.Set("q", city)
-	q.Set("appid", apiKey)
-	q.Set("units", "metric")
-	req.URL.RawQuery = q.Encode()
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -84,73 +73,32 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 		return nil, fmt.Errorf("forecast API returned status %d", resp.StatusCode)
 	}
 
-	var fcResp forecastResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fcResp); err != nil {
+	var reports []jmaReport
+	if err := json.NewDecoder(resp.Body).Decode(&reports); err != nil {
 		return nil, fmt.Errorf("decoding forecast response: %w", err)
 	}
+	if len(reports) == 0 {
+		return nil, fmt.Errorf("empty forecast response")
+	}
 
-	// 今日/明日は JST 基準で判定する (dt_txt は UTC のため JST に変換して比較)
+	// 今日/明日は JST 基準で判定する
 	now := time.Now().In(jst)
 	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
 	today := now.Format("2006-01-02")
 
-	var maxTemp float64 = -100
-	var minTemp float64 = 100
-	var todayMax float64 = -100
-	var todayMin float64 = 100
-	descCount := map[string]int{}
-	topDesc := ""
-	topCount := 0
-	var slots []TimeSlot
+	ts := reports[0].TimeSeries
+	if len(ts) < 3 {
+		return nil, fmt.Errorf("unexpected forecast response: got %d timeSeries, want >= 3", len(ts))
+	}
 
-	for _, item := range fcResp.List {
-		jstTime, err := time.ParseInLocation("2006-01-02 15:04:05", item.DtTxt, time.UTC)
-		if err != nil {
-			continue
-		}
-		jstTime = jstTime.In(jst)
-		datePart := jstTime.Format("2006-01-02")
+	weatherText, err := extractWeather(ts[0], weatherArea, tomorrow)
+	if err != nil {
+		return nil, err
+	}
 
-		if datePart == today {
-			if item.Main.Temp > todayMax {
-				todayMax = item.Main.Temp
-			}
-			if item.Main.Temp < todayMin {
-				todayMin = item.Main.Temp
-			}
-		}
-
-		if datePart != tomorrow {
-			continue
-		}
-		if item.Main.Temp > maxTemp {
-			maxTemp = item.Main.Temp
-		}
-		if item.Main.Temp < minTemp {
-			minTemp = item.Main.Temp
-		}
-		if len(item.Weather) > 0 {
-			d := item.Weather[0].Description
-			descCount[d]++
-			if descCount[d] > topCount {
-				topCount = descCount[d]
-				topDesc = d
-			}
-		}
-
-		for _, s := range targetSlots {
-			if jstTime.Hour() == s.hour {
-				desc := ""
-				if len(item.Weather) > 0 {
-					desc = item.Weather[0].Description
-				}
-				slots = append(slots, TimeSlot{
-					Time:        s.label,
-					Description: desc,
-					Temp:        item.Main.Temp,
-				})
-			}
-		}
+	maxTemp, minTemp, todayMax, todayMin, err := extractTemps(ts[2], tempArea, today, tomorrow)
+	if err != nil {
+		return nil, err
 	}
 
 	if maxTemp == -100 {
@@ -158,13 +106,79 @@ func FetchTomorrowWithURL(apiURL, city, apiKey string) (*WeatherData, error) {
 	}
 
 	return &WeatherData{
-		City:        fcResp.City.Name,
+		City:        weatherArea,
 		TempMax:     maxTemp,
 		TempMin:     minTemp,
-		Description: topDesc,
+		WeatherText: weatherText,
 		Date:        tomorrow,
-		TimeSlots:   slots,
 		TodayMax:    todayMax,
 		TodayMin:    todayMin,
 	}, nil
+}
+
+// extractWeather は天気シリーズ (timeSeries[0]) から明日の天気文を取り出す。
+// 全角スペースは半角に正規化する。
+func extractWeather(ts jmaTimeSeries, weatherArea, tomorrow string) (string, error) {
+	area, err := findArea(ts.Areas, weatherArea)
+	if err != nil {
+		return "", fmt.Errorf("weather series: %w", err)
+	}
+	for i, td := range ts.TimeDefines {
+		if len(td) >= 10 && td[:10] == tomorrow && i < len(area.Weathers) {
+			return strings.Join(strings.Fields(area.Weathers[i]), " "), nil
+		}
+	}
+	return "", fmt.Errorf("no weather data for tomorrow (%s)", tomorrow)
+}
+
+// extractTemps は気温シリーズ (timeSeries[2]) から今日/明日の最高・最低気温を取り出す。
+// JMA の気温は timeDefines が 00時 (最低) と 09時 (最高) の組で並ぶ。空文字は欠損としてスキップする。
+func extractTemps(ts jmaTimeSeries, tempArea, today, tomorrow string) (maxTemp, minTemp, todayMax, todayMin float64, err error) {
+	maxTemp, minTemp, todayMax, todayMin = -100, 100, -100, 100
+
+	area, err := findArea(ts.Areas, tempArea)
+	if err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("temp series: %w", err)
+	}
+
+	for i, td := range ts.TimeDefines {
+		if len(td) < 16 || i >= len(area.Temps) {
+			continue
+		}
+		datePart := td[:10]
+		hour := td[11:13]
+		if area.Temps[i] == "" {
+			continue
+		}
+		temp, convErr := parseFloat(area.Temps[i])
+		if convErr != nil {
+			continue
+		}
+		switch {
+		case datePart == today && hour == "00":
+			todayMin = temp
+		case datePart == today && hour == "09":
+			todayMax = temp
+		case datePart == tomorrow && hour == "00":
+			minTemp = temp
+		case datePart == tomorrow && hour == "09":
+			maxTemp = temp
+		}
+	}
+	return maxTemp, minTemp, todayMax, todayMin, nil
+}
+
+func findArea(areas []jmaArea, name string) (*jmaArea, error) {
+	for i := range areas {
+		if areas[i].Area.Name == name {
+			return &areas[i], nil
+		}
+	}
+	return nil, fmt.Errorf("area %q not found", name)
+}
+
+func parseFloat(s string) (float64, error) {
+	var f float64
+	_, err := fmt.Sscanf(s, "%g", &f)
+	return f, err
 }
