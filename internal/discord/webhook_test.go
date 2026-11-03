@@ -117,6 +117,42 @@ func TestBuildWeatherEmbed(t *testing.T) {
 	}
 }
 
+func TestBuildWeatherEmbed_todayDiff(t *testing.T) {
+	base := weather.WeatherData{
+		City:    "Tokyo",
+		TempMax: 18.0,
+		TempMin: 12.0,
+	}
+
+	t.Run("shows diff when today's temps are available", func(t *testing.T) {
+		wd := base
+		wd.TodayMax = 19.0
+		wd.TodayMin = 11.0
+		embed := buildWeatherEmbed(&wd)
+		found := false
+		for _, f := range embed.Fields {
+			if f.Name == "前日比" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("embed missing 前日比 field")
+		}
+	})
+
+	t.Run("omits diff when TodayMin is missing (sentinel)", func(t *testing.T) {
+		wd := base
+		wd.TodayMax = 19.0
+		wd.TodayMin = 100 // 欠損
+		embed := buildWeatherEmbed(&wd)
+		for _, f := range embed.Fields {
+			if f.Name == "前日比" {
+				t.Error("前日比 field should be omitted when TodayMin is missing")
+			}
+		}
+	})
+}
+
 func TestBuildOutfitEmbed(t *testing.T) {
 	advice := outfit.OutfitAdvice{
 		Category: "kids",

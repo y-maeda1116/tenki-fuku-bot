@@ -40,6 +40,9 @@ var categoryLabel = map[string]string{
 
 func buildWeatherEmbed(wd *weather.WeatherData) embed {
 	fields := []embedField{}
+	if wd.WeatherText != "" {
+		fields = append(fields, embedField{Name: "天気", Value: wd.WeatherText, Inline: false})
+	}
 	for _, slot := range wd.TimeSlots {
 		fields = append(fields, embedField{
 			Name:   slot.Time,
@@ -53,7 +56,8 @@ func buildWeatherEmbed(wd *weather.WeatherData) embed {
 		embedField{Name: "寒暖差", Value: fmt.Sprintf("%.1f℃", wd.TempMax-wd.TempMin), Inline: true},
 	)
 
-	if wd.TodayMax > -100 {
+	// いずれかの気温がセンチネル値のままなら前日比を表示しない
+	if wd.TodayMax > -100 && wd.TodayMin < 100 {
 		diffMax := wd.TempMax - wd.TodayMax
 		diffMin := wd.TempMin - wd.TodayMin
 		fields = append(fields, embedField{

@@ -14,8 +14,12 @@ type Categories struct {
 }
 
 type Config struct {
-	City       string     `yaml:"city"`
-	Categories Categories `yaml:"categories"`
+	// AreaCode は JMA の地方コード (例: 130000 = 東京)。
+	// WeatherArea / TempArea は JMA レスポンス内のエリア名。
+	AreaCode    string     `yaml:"areaCode"`
+	WeatherArea string     `yaml:"weatherArea"`
+	TempArea    string     `yaml:"tempArea"`
+	Categories  Categories `yaml:"categories"`
 }
 
 func Load(path string) (*Config, error) {

@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	content := []byte("city: Osaka\ncategories:\n  men: true\n  women: false\n  kids: true\n")
+	content := []byte("areaCode: \"270000\"\nweatherArea: \"大阪地方\"\ntempArea: \"大阪\"\ncategories:\n  men: true\n  women: false\n  kids: true\n")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, content, 0644); err != nil {
@@ -18,8 +18,14 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.City != "Osaka" {
-		t.Errorf("City = %q, want %q", cfg.City, "Osaka")
+	if cfg.AreaCode != "270000" {
+		t.Errorf("AreaCode = %q, want %q", cfg.AreaCode, "270000")
+	}
+	if cfg.WeatherArea != "大阪地方" {
+		t.Errorf("WeatherArea = %q, want %q", cfg.WeatherArea, "大阪地方")
+	}
+	if cfg.TempArea != "大阪" {
+		t.Errorf("TempArea = %q, want %q", cfg.TempArea, "大阪")
 	}
 	if !cfg.Categories.Men {
 		t.Error("Categories.Men = false, want true")

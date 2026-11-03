@@ -1,8 +1,8 @@
 name: Daily Weather Notification
 
 on:
-  # schedule:
-  #   - cron: '0 11 * * *'  # JST 20:00 = UTC 11:00
+  schedule:
+    - cron: '0 11 * * *'  # JST 20:00 = UTC 11:00
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,5 @@ jobs:
 
     - name: Run tenki-fuku-bot
       env:
-        WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: go run cmd/cli/main.go
