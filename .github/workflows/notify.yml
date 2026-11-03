@@ -20,9 +20,9 @@ jobs:
     - name: Check webhook secret
       id: check
       env:
-        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        SECRET_SET: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
       run: |
-        if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
+        if [ "${SECRET_SET}" != "true" ]; then
           echo "available=false" >> "$GITHUB_OUTPUT"
           echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping notification. Set it in Settings > Secrets and variables > Actions."
         else
