@@ -81,7 +81,7 @@ func TestFetchTomorrow(t *testing.T) {
 	today, tomorrow := tomorrowDates()
 	server := jmaTestServer(t, jmaFixture(t, today, tomorrow))
 
-	data, err := FetchTomorrowWithURL(server.URL, "130000", "東京地方", "東京")
+	data, err := FetchTomorrowWithURL(server.URL, "東京地方", "東京")
 	if err != nil {
 		t.Fatalf("FetchTomorrow() error = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestFetchTomorrow_missingTodayTempEntry(t *testing.T) {
 	body = mutated
 
 	server := jmaTestServer(t, body)
-	data, err := FetchTomorrowWithURL(server.URL, "130000", "東京地方", "東京")
+	data, err := FetchTomorrowWithURL(server.URL, "東京地方", "東京")
 	if err != nil {
 		t.Fatalf("FetchTomorrow() error = %v", err)
 	}
@@ -145,13 +145,36 @@ func TestFetchTomorrow_missingTodayTempEntry(t *testing.T) {
 	}
 }
 
+func TestFetchTomorrow_missingTomorrowMinTemp(t *testing.T) {
+	// 明日の最低気温が欠損している場合はエラー (センチネル値を通知しない)
+	today, tomorrow := tomorrowDates()
+
+	body := jmaFixture(t, today, tomorrow)
+	var resp []map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	temps := resp[0]["timeSeries"].([]interface{})[2].(map[string]interface{})["areas"].([]interface{})[0].(map[string]interface{})
+	temps["temps"] = []string{"19", "11", "", "18"}
+	mutated, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("re-marshaling fixture: %v", err)
+	}
+
+	server := jmaTestServer(t, mutated)
+	_, err = FetchTomorrowWithURL(server.URL, "東京地方", "東京")
+	if err == nil {
+		t.Error("FetchTomorrow() expected error when tomorrow's min temp is missing")
+	}
+}
+
 func TestFetchTomorrow_serverError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	_, err := FetchTomorrowWithURL(server.URL, "130000", "東京地方", "東京")
+	_, err := FetchTomorrowWithURL(server.URL, "東京地方", "東京")
 	if err == nil {
 		t.Error("FetchTomorrow() expected error for 500 response")
 	}
@@ -166,7 +189,7 @@ func TestFetchTomorrow_noDataForTomorrow(t *testing.T) {
 	body := jmaFixture(t, yst, today)
 	server := jmaTestServer(t, body)
 
-	_, err := FetchTomorrowWithURL(server.URL, "130000", "東京地方", "東京")
+	_, err := FetchTomorrowWithURL(server.URL, "東京地方", "東京")
 	if err == nil {
 		t.Error("FetchTomorrow() expected error when no data for tomorrow")
 	}

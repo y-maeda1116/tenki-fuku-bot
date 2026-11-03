@@ -53,11 +53,11 @@ type jmaArea struct {
 // 天気は weatherArea (例: 東京地方)、気温は tempArea (例: 東京) のエリア名で取得する。
 func FetchTomorrow(areaCode, weatherArea, tempArea string) (*WeatherData, error) {
 	apiURL := fmt.Sprintf("%s/%s.json", forecastURLBase, areaCode)
-	return FetchTomorrowWithURL(apiURL, areaCode, weatherArea, tempArea)
+	return FetchTomorrowWithURL(apiURL, weatherArea, tempArea)
 }
 
 // FetchTomorrowWithURL fetches tomorrow's forecast using a custom API URL (for testing).
-func FetchTomorrowWithURL(apiURL, areaCode, weatherArea, tempArea string) (*WeatherData, error) {
+func FetchTomorrowWithURL(apiURL, weatherArea, tempArea string) (*WeatherData, error) {
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -101,7 +101,8 @@ func FetchTomorrowWithURL(apiURL, areaCode, weatherArea, tempArea string) (*Weat
 		return nil, err
 	}
 
-	if maxTemp == -100 {
+	// センチネル値が残っている場合は明日のデータが欠損している
+	if maxTemp == -100 || minTemp == 100 {
 		return nil, fmt.Errorf("no forecast data available for tomorrow (%s)", tomorrow)
 	}
 
