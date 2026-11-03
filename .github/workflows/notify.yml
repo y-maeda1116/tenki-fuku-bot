@@ -17,7 +17,20 @@ jobs:
       with:
         go-version-file: 'go.mod'
 
+    - name: Check webhook secret
+      id: check
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      run: |
+        if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::DISCORD_WEBHOOK_URL secret is not set; skipping notification. Set it in Settings > Secrets and variables > Actions."
+        else
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Run tenki-fuku-bot
+      if: steps.check.outputs.available == 'true'
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: go run cmd/cli/main.go
